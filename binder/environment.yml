@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+dependencies:
+  - ipython
+  - matplotlib
+  - numpy
+  - pandas
+  - scipy
+  - nbgitpuller
