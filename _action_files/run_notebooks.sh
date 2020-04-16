@@ -24,3 +24,4 @@ else
     echo "These files failed to update properly: ${ERRORS}"
     echo "::set-output name=error_bool::true"
     echo "::set-output name=error_str::${ERRORS}"
+fi
