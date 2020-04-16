@@ -2,12 +2,10 @@ name: Update Notebooks And Refresh Page
 on:
   schedule:
     - cron:  '*/10 * * * *'
-  issues:
-    types: [opened]
 
 jobs:
   update-notebooks:
-    if: (github.event_name == 'schedule' || (github.event.issue.title == '[dashboard] Refresh Notebooks'  && github.actor == 'sanzgiri' && github.event_name == 'issues')) && github.repository == 'sanzgiri/covid19'
+    if: github.event_name == 'schedule' 
     runs-on: ubuntu-latest
     steps:
   
@@ -20,23 +18,6 @@ jobs:
         title: ${{ github.event.issue.title }}
         actor: ${{ github.actor }}
         event_name: ${{ github.event_name }}
-
-
-    - name: Comment With Link To Workflow On Issue
-      if: github.event_name == 'issues'
-      uses: actions/github-script@0.6.0
-      with:
-        github-token: ${{secrets.GITHUB_TOKEN}}
-        script: |
-          var run_id = process.env.RUN_ID;
-          github.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: `Automated refresh of notebooks instantiated with run id [${run_id}](https://github.com/github/covid19-dashboard/actions/runs/${run_id}).`
-          })
-      env:
-        RUN_ID: ${{ github.run_id	 }}
 
     - name: Copy Repository Contents
       uses: actions/checkout@v2
@@ -59,6 +40,7 @@ jobs:
         pip3 install matplotlib pandas numpy scipy seaborn papermill ipykernel jupyter folium plotly plotnine psutil pymc3 arviz xlrd altair altair_saver jinja2 selenium
         python3 -m ipykernel install --user --name python3
         sudo chmod -R 777 .
+        
     - name: update notebooks
       id: update_nb
       run: |
