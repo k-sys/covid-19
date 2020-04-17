@@ -1,4 +1,4 @@
-dateRep,day,month,year,cases,deaths,countriesAndTerritories,geoId,countryterritoryCode,popData2018
+date,day,month,year,cases,deaths,state,geoId,countryterritoryCode,popData2018
 17/04/2020,17,4,2020,10,4,Afghanistan,AF,AFG,37172386
 16/04/2020,16,4,2020,70,2,Afghanistan,AF,AFG,37172386
 15/04/2020,15,4,2020,49,2,Afghanistan,AF,AFG,37172386
