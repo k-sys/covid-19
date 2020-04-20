@@ -1,30 +1,48 @@
-# Original code https://wwwnc.cdc.gov/eid/article/26/6/20-0357_article
-import os
+# Original R_t code https://wwwnc.cdc.gov/eid/article/26/6/20-0357_article
+from datetime import datetime as dt
+from datetime import timedelta
+import logging
 
 import pandas as pd
 import numpy as np
-
-from matplotlib import pyplot as plt
-from matplotlib.dates import date2num, num2date
-from matplotlib import dates as mdates
-from matplotlib import ticker
-from matplotlib.colors import ListedColormap
-from matplotlib.patches import Patch
+import requests
 
 from scipy import stats as sps
-from scipy.interpolate import interp1d
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s %(name)s:%(lineno)d - %(message)s")
+logger = logging.getLogger(__name__)
+
+SKIP_N_LAST_DAYS_IN_DATA = 5
 
 R_T_MAX = 12
-r_t_range = np.linspace(0, R_T_MAX, R_T_MAX*100+1)
+r_t_range = np.linspace(0, R_T_MAX, R_T_MAX * 100 + 1)
 # Gamma is 1/serial interval
 # https://wwwnc.cdc.gov/eid/article/26/6/20-0357_article
-GAMMA = 1/4
+GAMMA = 1 / 4
 
-state_name = 'Finland' # TODO, it is possible to calculate all Finnis state separetely
+state_name = 'Finland'  # TODO, it is possible to calculate all Finn states separately
+
+
+def get_data_from_THL():
+    url = "https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/processedThlData"
+
+    payload = ""
+    response = requests.request("GET", url, data=payload)
+
+    logger.info(f'Response status: {response.status_code}')
+    response_json = response.json()
+
+    finland = pd.DataFrame(response_json['confirmed']['Kaikki sairaanhoitopiirit'])
+    finland['date'] = finland['date'].apply(pd.to_datetime).dt.date
+    finland.set_index(finland['date'], inplace=True)
+
+    last_day = dt.today().date() - timedelta(SKIP_N_LAST_DAYS_IN_DATA)
+    logger.info(f'Use data before {last_day}')
+    return finland[finland['date'] < last_day]
 
 
 def prepare_cases(cases):
-    new_cases = cases  # cases.diff() # HUOM
+    new_cases = cases
 
     smoothed = new_cases.rolling(7,
                                  win_type='gaussian',
@@ -93,29 +111,24 @@ def highest_density_interval(pmf, p=.95):
     return pd.Series([low, high], index=['Low', 'High'])
 
 
-# READ DATA
-# TODO: get new data from APIs
-finland = pd.read_csv('finland_stat.csv', sep='\t',
-                      skiprows=1, header=None, names=['date', 'cases'],
-                      parse_dates=['date'])
+if __name__ == '__main__':
+    logger.info('START')
 
-# set index
-finland.set_index(finland['date'], inplace=True)
+    finland = get_data_from_THL()
+    cases = finland['value'].rename(f"{state_name} cases")
 
-# cases = states.xs(state_name).rename(f"{state_name} cases")
-cases = finland['cases'].rename(f"{state_name} cases")
+    # TODO write original_cases, smoothed_case to files in blob storage
+    original_cases, smoothed_cases = prepare_cases(cases)
 
-original_cases, smoothed_cases = prepare_cases(cases)
+    posteriors = get_posteriors(smoothed_cases)
+    hdis = highest_density_interval(posteriors)
 
-# TODO write cases to file
+    most_likely = posteriors.idxmax().rename('ML')
 
-posteriors = get_posteriors(smoothed_cases)
-hdis = highest_density_interval(posteriors)
+    result = pd.concat([most_likely, hdis], axis=1).reset_index()
 
-most_likely = posteriors.idxmax().rename('ML')
-
-# Look into why you shift -1
-result = pd.concat([most_likely, hdis], axis=1)
-
-# TODO write result (ML, Low, High) to file
-print(result)
+    # TODO write result to file in blob storage
+    filename = f'Rt_{dt.today().date()}.tsv'
+    logger.info(f'TODO: write file to {filename} in blob storage')
+    print(result)
+    logger.info('DONE')
