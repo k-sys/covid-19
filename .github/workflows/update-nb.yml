@@ -1,7 +1,11 @@
 name: Update Notebooks And Refresh Page
 on:
-  schedule:
-    - cron:  '23 2 * * *'
+  # disable scheduled run i
+  #schedule:
+  #  - cron:  '23 2 * * *'
+  push:
+    branches-ignore:
+      - '**'
 
 jobs:
   update-notebooks:
