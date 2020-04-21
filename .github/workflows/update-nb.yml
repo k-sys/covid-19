@@ -1,6 +1,6 @@
 name: Update Notebooks And Refresh Page
 on:
-  # disable scheduled run i
+  # disable workflow for now
   #schedule:
   #  - cron:  '23 2 * * *'
   push:
