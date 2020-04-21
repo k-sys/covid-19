@@ -2,6 +2,7 @@
 from datetime import datetime as dt
 from datetime import timedelta
 import logging
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 
 import pandas as pd
 import numpy as np
@@ -21,6 +22,10 @@ r_t_range = np.linspace(0, R_T_MAX, R_T_MAX * 100 + 1)
 GAMMA = 1 / 4
 
 state_name = 'Finland'  # TODO, it is possible to calculate all Finn states separately
+
+# Setup Blob Service client
+CONTAINER_NAME = "estimate-rt"
+CONNECTION_STRING = ""
 
 
 def get_data_from_THL():
@@ -113,13 +118,25 @@ def highest_density_interval(pmf, p=.95):
 
 if __name__ == '__main__':
     logger.info('START')
+    fname_date = str(dt.today()).replace(' ', '_')
 
     finland = get_data_from_THL()
     cases = finland['value'].rename(f"{state_name} cases")
 
-    # TODO write original_cases, smoothed_case to files in blob storage
     original_cases, smoothed_cases = prepare_cases(cases)
 
+    # Create Blob service connection
+    blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+
+    cases_filename = f'{fname_date}_cases.csv'
+    logger.info(f'Upload to Azure cases_filename')
+
+    blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=cases_filename)
+    blob_client.upload_blob(pd.concat([original_cases.rename('Original Cases'),
+                                       smoothed_cases.rename('Smoothed Cases')], axis=1).to_csv(index_label='date'))
+
+    logger.info('Calculate R_t')
     posteriors = get_posteriors(smoothed_cases)
     hdis = highest_density_interval(posteriors)
 
@@ -127,8 +144,10 @@ if __name__ == '__main__':
 
     result = pd.concat([most_likely, hdis], axis=1).reset_index()
 
-    # TODO write result to file in blob storage
-    filename = f'Rt_{dt.today().date()}.tsv'
-    logger.info(f'TODO: write file to {filename} in blob storage')
-    print(result)
+    result_filename = f'{fname_date}_Rt.csv'
+    logger.info(f'Write file to {result_filename} in blob storage')
+
+    blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=result_filename)
+    blob_client.upload_blob(result.to_csv(index=False))
+
     logger.info('DONE')
