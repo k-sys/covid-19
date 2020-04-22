@@ -25,8 +25,7 @@ state_name = 'Finland'  # TODO, it is possible to calculate all Finn states sepa
 
 # Setup Blob Service client
 CONTAINER_NAME = "estimate-rt"
-CONNECTION_STRING = ""
-
+CONNECTION_STRING = "" # TODO!!! NOTE CONNECTION_STRING!!
 
 def get_data_from_THL():
     url = "https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/processedThlData"
