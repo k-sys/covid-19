@@ -9,3 +9,4 @@ dependencies:
   - pandas
   - pystan
   - python=3
+  - seaborn
