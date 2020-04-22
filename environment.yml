@@ -3,10 +3,11 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - pystan
   - jupyterlab
+  - seaborn
   - arviz
   - scipy
   - pandas
-  - pystan
-  - python=3
-  - seaborn
+  - python=3.7
+  - tqdm
