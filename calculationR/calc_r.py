@@ -115,7 +115,7 @@ def highest_density_interval(pmf, p=.95):
     return pd.Series([low, high], index=['Low', 'High'])
 
 
-if __name__ == '__main__':
+def main() -> None:
     logger.info('START')
     fname_date = str(dt.today()).replace(' ', '_')
 
