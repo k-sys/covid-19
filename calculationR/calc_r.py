@@ -2,31 +2,27 @@
 from datetime import datetime as dt
 from datetime import timedelta
 import logging
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+import io
+from azure.storage.blob import BlobServiceClient
 
 import pandas as pd
 import numpy as np
 import requests
 
-from scipy import stats as sps
-
-import os
-
 from matplotlib import pyplot as plt
-from matplotlib.dates import date2num, num2date
+from matplotlib.dates import date2num
 from matplotlib import dates as mdates
 from matplotlib import ticker
 from matplotlib.colors import ListedColormap
-from matplotlib.patches import Patch
 
 from scipy import stats as sps
 from scipy.interpolate import interp1d
-
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s %(name)s:%(lineno)d - %(message)s")
 logger = logging.getLogger(__name__)
 
 SKIP_N_LAST_DAYS_IN_DATA = 5
+DAYS_USED_IN_POSTERIOR = 7
 
 R_T_MAX = 12
 r_t_range = np.linspace(0, R_T_MAX, R_T_MAX * 100 + 1)
@@ -38,7 +34,8 @@ state_name = 'Finland'  # TODO, it is possible to calculate all Finn states sepa
 
 # Setup Blob Service client
 CONTAINER_NAME = "estimate-rt"
-CONNECTION_STRING = "" # TODO!!! NOTE CONNECTION_STRING!!
+CONNECTION_STRING = ""  # TODO! AZURE CONNECTION STRING
+
 
 def get_data_from_THL():
     url = "https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/processedThlData"
@@ -78,7 +75,8 @@ def prepare_cases(cases):
     return original, smoothed
 
 
-def get_posteriors(sr, window=7, min_periods=1):
+def get_posteriors(sr, min_periods=1):
+    window = DAYS_USED_IN_POSTERIOR
     lam = sr[:-1].values * np.exp(GAMMA * (r_t_range[:, None] - 1))
 
     # Note: if you want to have a Uniform prior you can use the following line instead.
@@ -196,40 +194,55 @@ def highest_density_interval(pmf, p=.95):
     return pd.Series([low, high], index=['Low', 'High'])
 
 
-def main():
+def _write_to_cloud(client, data, destination):
+    blob_client = client.get_blob_client(container=CONTAINER_NAME, blob=destination)
+    blob_client.upload_blob(data)
+
+
+def main(faux_param=None) -> None:
     logger.info('START')
     fname_date = str(dt.today()).replace(' ', '_')
+
+    cases_filename = f'{fname_date}_cases.csv'
+    cases_image_name = f'{fname_date}_cases.png'
+    result_filename = f'{fname_date}_Rt.csv'
+    result_image_name = f'{fname_date}_Rt.png'
 
     finland = get_data_from_THL()
     cases = finland['value'].rename(f"{state_name} cases")
 
     original_cases, smoothed_cases = prepare_cases(cases)
 
-    # # Create Blob service connection
-    # blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
-    # container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+    # Create Blob service connection
+    blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
 
-    cases_filename = f'{fname_date}_cases.csv'
+    logger.info(f'Upload to Azure cases')
 
-    os.mkdir(fname_date)
+    _write_to_cloud(blob_service_client, pd.concat([original_cases.rename('Original Cases'),
+                                                    smoothed_cases.rename('Smoothed Cases')], axis=1).to_csv(
+        index_label='date'),
+                    cases_filename)
+
     original_cases.plot(title=f"{state_name} New Cases per Day",
-                  c='k',
-                  linestyle=':',
-                  alpha=.5,
-                  label='Actual',
-                  legend=True,
-                  figsize=(600 / 72, 400 / 72))
+                        c='k',
+                        linestyle=':',
+                        alpha=.5,
+                        label='Actual',
+                        legend=True,
+                        figsize=(600 / 72, 400 / 72))
 
     ax = smoothed_cases.plot(label='Smoothed',
-                       legend=True)
+                             legend=True)
     ax.get_figure().set_facecolor('w')
-    plt.savefig(f'{fname_date}/{fname_date}_cases.png')
 
-    # logger.info(f'Upload to Azure cases_filename')
+    img_data = io.BytesIO()
+    plt.savefig(img_data, format='png')
+    img_data.seek(0)
 
-    # blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=cases_filename)
-    # blob_client.upload_blob(pd.concat([original_cases.rename('Original Cases'),
-    #                                    smoothed_cases.rename('Smoothed Cases')], axis=1).to_csv(index_label='date'))
+    _write_to_cloud(blob_service_client, img_data, cases_image_name)
+
+    # Calculate R_t
 
     logger.info('Calculate R_t')
     posteriors = get_posteriors(smoothed_cases)
@@ -237,13 +250,14 @@ def main():
 
     most_likely = posteriors.idxmax().rename('ML')
 
-    result = pd.concat([most_likely, hdis], axis=1) #.reset_index()
+    result = pd.concat([most_likely, hdis], axis=1)
 
-    result_filename = f'{fname_date}_Rt.csv'
-    # logger.info(f'Write file to {result_filename} in blob storage')
+    # Write results to blob storage
 
-    # blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=result_filename)
-    # blob_client.upload_blob(result.to_csv(index=False))
+    logger.info(f'Write file to {result_filename} in blob storage')
+
+    _write_to_cloud(blob_service_client, result.reset_index().to_csv(index=False), result_filename)
+
     fig, ax = plt.subplots(figsize=(600 / 72, 400 / 72))
 
     plot_rt(result, ax, state_name, fig)
@@ -252,9 +266,10 @@ def main():
     ax.xaxis.set_major_locator(mdates.WeekdayLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
 
-    plt.savefig(f'{fname_date}/{fname_date}_Rt.png')
+    img_data = io.BytesIO()
+    plt.savefig(img_data, format='png')
+    img_data.seek(0)
+
+    _write_to_cloud(blob_service_client, img_data, result_image_name)
 
     logger.info('DONE')
-
-
-main()
