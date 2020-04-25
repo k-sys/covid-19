@@ -13,6 +13,9 @@ transformed data {
   /* given mean and s.d. */
   real tau_mu = log(tau_mean / sqrt(1.0 + tau_std^2/tau_mean^2));
   real tau_sigma = sqrt(log1p(tau_std^2/tau_mean^2));
+
+  real Rt_est = 3.0;
+  real log_first_factor = (Rt_est-1)/tau_mean;
 }
 
 parameters {
@@ -20,18 +23,45 @@ parameters {
   real<lower=0> tau;
 
   /* Gaussian process noise */
-  real<lower=0> sigma;
+  real log_sigma_raw;
 
-  /* Expected counts each day */
-  real<lower=0> exp_cts[ndays];
+  /* Transformed to expected counts each day */
+  real rate_raw[ndays];
 }
 
 transformed parameters {
-  /* Reproduction rate */
+  real sigma = tau * exp(log_sigma_raw - log(100));
+  real exp_cts[ndays];
   real Rt[ndays-1];
+  real log_jacobian;
 
-  for (i in 2:ndays) {
-    Rt[i-1] = tau*(log(exp_cts[i]) - log(exp_cts[i-1])) + 1;
+  {
+    real log_jacs[ndays];
+
+    exp_cts[1] = k[1]*exp(rate_raw[1]/sqrt(k[1]));
+    log_jacs[1] = log(exp_cts[1]) - 0.5*log(k[1]);
+
+    for (i in 2:ndays) {
+      if (k[i] > 100) {
+        /* Then we transform rate_raw to exp_cts, because the cts are pretty well constrained. */
+        exp_cts[i] = k[i]*exp(rate_raw[i]/sqrt(k[i]));
+
+        Rt[i-1] = tau*(log(exp_cts[i]) - log(exp_cts[i-1])) + 1;
+        log_jacs[i] = log(tau) - 0.5*log(k[i]);
+      } else {
+        /* The counts are not well constrained, so we produce Rt instead. */
+        if (i == 2) {
+          Rt[i-1] = tau*(log_first_factor + rate_raw[i]/tau_mean) + 1;
+          log_jacs[i] = log(tau) - log(tau_mean);
+        } else {
+          Rt[i-1] = Rt[i-2] + sigma*rate_raw[i];
+          log_jacs[i] = log(sigma);
+        }
+        exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
+      }
+    }
+
+    log_jacobian = sum(log_jacs);
   }
 }
 
@@ -39,27 +69,26 @@ model {
   /* Prior on serial time is log-normal with mean and s.d. matching input */
   tau ~ lognormal(tau_mu, tau_sigma);
 
-  /* Prior on sigma; scatter by a factor of 3 around 0.3 per day */
+  /* Prior on sigma; scatter by a factor of 3 around 0.3 per day; Jacobian is
+
+  d(sigma) / d(log_sigma_raw) = sigma
+   */
   sigma ~ lognormal(log(0.3), 1);
+  target += log(sigma);
 
   /* Prior on first day's expected counts is broad log-normal */
-  exp_cts[1] ~ lognormal(log(10), 2);
+  exp_cts[1] ~ lognormal(log(k[1]), 1);
 
-  /* The AR(1) process prior; we begin with an N(0,1) prior on Rt at the first
-     sample, and then increment according to the AR(1) process.  We need to
-     include a Jacobian factor because we sample in exp_cts, not Rt:
-
-     Jac = d(Rt[i]) / d(exp_cts[i+1]) = tau / exp_cts[i+1]
-
-     We accumulate the -log(exp_cts[i+1]) as we calculate the Rt priors; then we
-     account for the (ndays-1)*log(tau) outside the loop.  */
-  Rt[1] ~ normal(0, 10);
-  target += -log(exp_cts[2]);
+  /* The AR(1) process prior; we begin with an N(3,2) prior on Rt based on
+     Chinese studies at the first sample, and then increment according to the
+     AR(1) process.  Above, we have computed the Jacobian factor between Rt and
+     rate_raw (which we sample in). */
+  Rt[1] ~ normal(3, 2);
   for (i in 2:ndays-1) {
     Rt[i] ~ normal(Rt[i-1], sigma);
-    target += -log(exp_cts[i+1]);
   }
-  target += (ndays-1)*log(tau);
+
+  target += log_jacobian;
 
   /* Poisson likelihood for the counts on each day. */
   k ~ poisson(exp_cts);
