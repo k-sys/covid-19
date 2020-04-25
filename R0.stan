@@ -22,6 +22,8 @@ parameters {
   /* Serial time (days) */
   real<lower=0> tau;
 
+  real<lower=0> smoothing_timescale;
+
   /* Gaussian process noise */
   real log_sigma_raw;
 
@@ -36,6 +38,7 @@ transformed parameters {
   real log_jacobian;
 
   {
+    real sf = exp(-1.0/smoothing_timescale);
     real log_jacs[ndays];
 
     exp_cts[1] = k[1]*exp(rate_raw[1]/sqrt(k[1]));
@@ -54,7 +57,7 @@ transformed parameters {
           Rt[i-1] = tau*(log_first_factor + rate_raw[i]/tau_mean) + 1;
           log_jacs[i] = log(tau) - log(tau_mean);
         } else {
-          Rt[i-1] = Rt[i-2] + sigma*rate_raw[i];
+          Rt[i-1] = sf*Rt[i-2] + sigma*rate_raw[i];
           log_jacs[i] = log(sigma);
         }
         exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
@@ -66,6 +69,8 @@ transformed parameters {
 }
 
 model {
+  real sf = exp(-1.0/smoothing_timescale);
+
   /* Prior on serial time is log-normal with mean and s.d. matching input */
   tau ~ lognormal(tau_mu, tau_sigma);
 
@@ -76,6 +81,9 @@ model {
   sigma ~ lognormal(log(0.3), 1);
   target += log(sigma);
 
+  /* Smooth on timescale ~14 days but with a lot of uncertainty. */
+  smoothing_timescale ~ lognormal(log(14), 0.5);
+
   /* Prior on first day's expected counts is broad log-normal */
   exp_cts[1] ~ lognormal(log(k[1]), 1);
 
@@ -85,7 +93,7 @@ model {
      rate_raw (which we sample in). */
   Rt[1] ~ normal(3, 2);
   for (i in 2:ndays-1) {
-    Rt[i] ~ normal(Rt[i-1], sigma);
+    Rt[i] ~ normal(sf*Rt[i-1], sigma);
   }
 
   target += log_jacobian;
