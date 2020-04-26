@@ -6,6 +6,10 @@ data {
   /* Parameters for the marginalization over serial time */
   real tau_mean;
   real tau_std;
+
+  /* Parameters for the log-normal smoothing prior. */
+  real sigma_mu;
+  real sigma_sigma;
 }
 
 transformed data {
@@ -13,91 +17,93 @@ transformed data {
   /* given mean and s.d. */
   real tau_mu = log(tau_mean / sqrt(1.0 + tau_std^2/tau_mean^2));
   real tau_sigma = sqrt(log1p(tau_std^2/tau_mean^2));
-
-  real Rt_est = 3.0;
-  real log_first_factor = (Rt_est-1)/tau_mean;
 }
 
 parameters {
   /* Serial time (days) */
   real<lower=0> tau;
 
-  real<lower=0> smoothing_timescale;
+  /* stepsize of the random walk in log(Rt) */
+  real<lower=0> sigma;
 
-  /* Gaussian process noise */
-  real log_sigma_raw;
+  /* First day's number of cases */
+  real<lower=0> L0;
 
-  /* Transformed to expected counts each day */
-  real rate_raw[ndays];
+  /* Will be transformed into Rt. */
+  real Rt_raw[ndays-1];
 }
 
 transformed parameters {
-  real sigma = tau * exp(log_sigma_raw - log(100));
-  real exp_cts[ndays];
   real Rt[ndays-1];
   real log_jacobian;
 
   {
-    real sf = exp(-1.0/smoothing_timescale);
-    real log_jacs[ndays];
-
-    exp_cts[1] = k[1]*exp(rate_raw[1]/sqrt(k[1]));
-    log_jacs[1] = log(exp_cts[1]) - 0.5*log(k[1]);
-
+    real log_jac[ndays-1];
     for (i in 2:ndays) {
-      if (k[i] > 100) {
-        /* Then we transform rate_raw to exp_cts, because the cts are pretty well constrained. */
-        exp_cts[i] = k[i]*exp(rate_raw[i]/sqrt(k[i]));
+      real Rt_counts_raw;
+      real Rt_counts;
+      real sd_counts;
+      real wt_counts;
 
-        Rt[i-1] = tau*(log(exp_cts[i]) - log(exp_cts[i-1])) + 1;
-        log_jacs[i] = log(tau) - 0.5*log(k[i]);
+      real Rt_prior;
+      real sd_prior;
+      real wt_prior;
+
+      real Rt_total;
+      real sd_total;
+      real wt_total;
+
+      real Rt_est;
+
+      if (i == 2) {
+        Rt_prior = 3.0;
+        sd_prior = 2.0;
       } else {
-        /* The counts are not well constrained, so we produce Rt instead. */
-        if (i == 2) {
-          Rt[i-1] = tau*(log_first_factor + rate_raw[i]/tau_mean) + 1;
-          log_jacs[i] = log(tau) - log(tau_mean);
-        } else {
-          Rt[i-1] = sf*Rt[i-2] + sigma*rate_raw[i];
-          log_jacs[i] = log(sigma);
-        }
-        exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
+        Rt_prior = Rt[i-2];
+        sd_prior = sigma*Rt[i-2];
       }
+      wt_prior = 1.0/(sd_prior*sd_prior);
+
+      Rt_counts_raw = tau*(log(k[i]) - log(k[i-1])) + 1.0;
+      Rt_counts = log_sum_exp(10.0*Rt_counts_raw, 0.0)/10.0; /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.1 or so */
+      sd_counts = tau / sqrt(k[i]+1);
+      wt_counts = 1.0/(sd_counts*sd_counts);
+
+      wt_total = wt_counts + wt_prior;
+      Rt_total = (wt_counts*Rt_counts + wt_prior*Rt_prior)/wt_total;
+      sd_total = sd_counts*sd_prior/sqrt(sd_counts*sd_counts + sd_prior*sd_prior);
+
+      Rt[i-1] = Rt_total*exp(sd_total/Rt_total*Rt_raw[i-1]);
+      log_jac[i-1] = log(Rt[i-1]) + log(sd_total) - log(Rt_total);
     }
 
-    log_jacobian = sum(log_jacs);
+    log_jacobian = sum(log_jac);
   }
 }
 
 model {
-  real sf = exp(-1.0/smoothing_timescale);
+  real exp_cts[ndays];
 
   /* Prior on serial time is log-normal with mean and s.d. matching input */
   tau ~ lognormal(tau_mu, tau_sigma);
 
-  /* Prior on sigma; scatter by a factor of 3 around 0.3 per day; Jacobian is
-
-  d(sigma) / d(log_sigma_raw) = sigma
-   */
-  sigma ~ lognormal(log(0.3), 1);
-  target += log(sigma);
-
-  /* Smooth on timescale ~14 days but with a lot of uncertainty. */
-  smoothing_timescale ~ lognormal(log(14), 0.5);
-
-  /* Prior on first day's expected counts is broad log-normal */
-  exp_cts[1] ~ lognormal(log(k[1]), 1);
+  /* Prior on sigma, supplied by the user. */
+  sigma ~ lognormal(sigma_mu, sigma_sigma);
 
   /* The AR(1) process prior; we begin with an N(3,2) prior on Rt based on
      Chinese studies at the first sample, and then increment according to the
      AR(1) process.  Above, we have computed the Jacobian factor between Rt and
      rate_raw (which we sample in). */
-  Rt[1] ~ normal(3, 2);
+  Rt[1] ~ lognormal(log(3), 2.0/3.0);
   for (i in 2:ndays-1) {
-    Rt[i] ~ normal(sf*Rt[i-1], sigma);
+    Rt[i] ~ lognormal(log(Rt[i-1]), sigma);
   }
-
   target += log_jacobian;
 
+  exp_cts[1] = L0;
+  for (i in 2:ndays) {
+    exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
+  }
   /* Poisson likelihood for the counts on each day. */
   k ~ poisson(exp_cts);
 }
