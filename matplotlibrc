@@ -196,19 +196,18 @@
 ## 10 pt is the standard value.
 
 #font.family         : sans-serif
-font.style          : normal
-font.variant        : normal
-font.weight         : bold
+#font.style          : normal
+#font.variant        : normal
+#font.weight         : normal
 #font.stretch        : normal
-
 ## note that font.size controls default text sizes.  To configure
 ## special text sizes tick labels, axes, labels, title, etc, see the rc
 ## settings for axes and ticks. Special text sizes can be defined
 ## relative to font.size, using the following values: xx-small, x-small,
 ## small, medium, large, x-large, xx-large, larger, or smaller
-font.size           : 13.0
+#font.size           : 10.0
 #font.serif          : DejaVu Serif, Bitstream Vera Serif, Computer Modern Roman, New Century Schoolbook, Century Schoolbook L, Utopia, ITC Bookman, Bookman, Nimbus Roman No9 L, Times New Roman, Times, Palatino, Charter, serif
-font.sans-serif     : Helvetica Neue, Lucida Grande, Verdana, Geneva, Lucid, Arial, Avant Garde, sans-serif
+#font.sans-serif     : DejaVu Sans, Bitstream Vera Sans, Computer Modern Sans Serif, Lucida Grande, Verdana, Geneva, Lucid, Arial, Helvetica, Avant Garde, sans-serif
 #font.cursive        : Apple Chancery, Textile, Zapf Chancery, Sand, Script MT, Felipa, cursive
 #font.fantasy        : Comic Sans MS, Chicago, Charcoal, ImpactWestern, Humor Sans, xkcd, fantasy
 #font.monospace      : DejaVu Sans Mono, Bitstream Vera Sans Mono, Computer Modern Typewriter, Andale Mono, Nimbus Mono L, Courier New, Courier, Fixed, Terminal, monospace
@@ -217,7 +216,7 @@ font.sans-serif     : Helvetica Neue, Lucida Grande, Verdana, Geneva, Lucid, Ari
 ## text properties used by text.Text.  See
 ## http://matplotlib.org/api/artist_api.html#module-matplotlib.text for more
 ## information on text properties
-text.color          : 555555
+#text.color          : black
 
 #### LaTeX customizations. See http://wiki.scipy.org/Cookbook/Matplotlib/UsingTex
 #text.usetex         : False  ## use latex for all text handling. The following fonts
@@ -288,20 +287,19 @@ text.color          : 555555
 ## default face and edge color, default tick sizes,
 ## default fontsizes for ticklabels, and so on.  See
 ## http://matplotlib.org/api/axes_api.html#module-matplotlib.axes
-axes.facecolor      : white   ## axes background color
-axes.edgecolor      : 555555   ## axes edge color
-axes.linewidth      : 1     ## edge linewidth
+#axes.facecolor      : white   ## axes background color
+#axes.edgecolor      : black   ## axes edge color
+#axes.linewidth      : 0.8     ## edge linewidth
 #axes.grid           : False   ## display grid or not
 #axes.grid.axis      : both    ## which axis the grid should apply to
 #axes.grid.which     : major   ## gridlines at major, minor or both ticks
-axes.titlesize      : 14   ## fontsize of the axes title
-axes.titlelocation   : center
-axes.titleweight    : normal  ## font weight of title
-axes.titlepad       : 10.0     ## pad between axes and title in points
+#axes.titlesize      : large   ## fontsize of the axes title
+#axes.titleweight    : normal  ## font weight of title
+#axes.titlepad       : 6.0     ## pad between axes and title in points
 #axes.labelsize      : medium  ## fontsize of the x any y labels
-axes.labelpad       : 4.0     ## space between label and axis
+#axes.labelpad       : 4.0     ## space between label and axis
 #axes.labelweight    : normal  ## weight of the x and y labels
-axes.labelcolor     : 555555
+#axes.labelcolor     : black
 #axes.axisbelow      : line    ## draw axis gridlines and ticks below
                                ## patches (True); above patches but below
                                ## lines ('line'); or above all (False)
@@ -326,12 +324,12 @@ axes.labelcolor     : 555555
                                          ## digits from tick labels.
 #axes.spines.left   : True   ## display axis spines
 #axes.spines.bottom : True
-axes.spines.top    : False
-axes.spines.right  : False
+#axes.spines.top    : True
+#axes.spines.right  : True
 #axes.unicode_minus  : True    ## use unicode for the minus symbol
                                ## rather than hyphen.  See
                                ## http://en.wikipedia.org/wiki/Plus_and_minus_signs#Character_codes
-axes.prop_cycle    : cycler('color', ['B3220F','F16E53','FFC475', '006F98', '1ABBEF', '7FD2FD', '153D53','0F9197'])
+#axes.prop_cycle    : cycler('color', ['1f77b4', 'ff7f0e', '2ca02c', 'd62728', '9467bd', '8c564b', 'e377c2', '7f7f7f', 'bcbd22', '17becf'])
                       ## color cycle for plot lines  as list of string
                       ## colorspecs: single letter, long name, or web-style hex
 					  ## Note the use of string escapes here ('1f77b4', instead of 1f77b4)
@@ -382,7 +380,6 @@ axes.prop_cycle    : cycler('color', ['B3220F','F16E53','FFC475', '006F98', '1AB
 #xtick.minor.top      : True   ## draw x axis top minor ticks
 #xtick.minor.bottom   : True   ## draw x axis bottom minor ticks
 #xtick.alignment      : center ## alignment of xticks
-xtick.color            : 555555
 
 #ytick.left           : True   ## draw ticks on the left side
 #ytick.right          : False  ## draw ticks on the right side
@@ -403,17 +400,16 @@ xtick.color            : 555555
 #ytick.minor.left     : True   ## draw y axis left minor ticks
 #ytick.minor.right    : True   ## draw y axis right minor ticks
 #ytick.alignment      : center_baseline ## alignment of yticks
-ytick.color            : 555555
 
 #### GRIDS
-grid.color       :   eeeeee    ## grid color
+#grid.color       :   b0b0b0    ## grid color
 #grid.linestyle   :   -         ## solid
 #grid.linewidth   :   0.8       ## in points
 #grid.alpha       :   1.0       ## transparency, between 0.0 and 1.0
 
 #### Legend
 #legend.loc           : best
-legend.frameon       : False     ## if True, draw the legend on a background patch
+#legend.frameon       : True     ## if True, draw the legend on a background patch
 #legend.framealpha    : 0.8      ## legend patch transparency
 #legend.facecolor     : inherit  ## inherit from axes.facecolor; or color spec
 #legend.edgecolor     : 0.8      ## background patch boundary color
@@ -436,13 +432,13 @@ legend.frameon       : False     ## if True, draw the legend on a background pat
 
 #### FIGURE
 ## See http://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure
-figure.titlesize : 16      ## size of the figure title (Figure.suptitle())
+#figure.titlesize : large      ## size of the figure title (Figure.suptitle())
 #figure.titleweight : normal   ## weight of the figure title
 #figure.figsize   : 6.4, 4.8   ## figure size in inches
 #figure.dpi       : 100        ## figure dots per inch
-figure.facecolor : white      ## figure facecolor
+#figure.facecolor : white      ## figure facecolor
 #figure.edgecolor : white      ## figure edgecolor
-#figure.frameon : False         ## enable figure frame
+#figure.frameon : True         ## enable figure frame
 #figure.max_open_warning : 20  ## The maximum number of figures to open through
                                ## the pyplot interface before emitting a warning.
                                ## If less than one this feature is disabled.
@@ -450,10 +446,10 @@ figure.facecolor : white      ## figure facecolor
 #figure.subplot.left    : 0.125  ## the left side of the subplots of the figure
 #figure.subplot.right   : 0.9    ## the right side of the subplots of the figure
 #figure.subplot.bottom  : 0.11   ## the bottom of the subplots of the figure
-figure.subplot.top     : 0.91   ## the top of the subplots of the figure
+#figure.subplot.top     : 0.88   ## the top of the subplots of the figure
 #figure.subplot.wspace  : 0.2    ## the amount of width reserved for space between subplots,
                                  ## expressed as a fraction of the average axis width
-figure.subplot.hspace  : 0.2    ## the amount of height reserved for space between subplots,
+#figure.subplot.hspace  : 0.2    ## the amount of height reserved for space between subplots,
                                  ## expressed as a fraction of the average axis height
 
 ## Figure layout
@@ -488,7 +484,6 @@ figure.subplot.hspace  : 0.2    ## the amount of height reserved for space betwe
 #errorbar.capsize : 0             ## length of end cap on error bars in pixels
 
 #### HISTOGRAM PLOTS
-
 #hist.bins : 10                   ## The default number of histogram bins.
                                   ## If Numpy 1.11 or later is
                                   ## installed, may also be `auto`
