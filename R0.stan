@@ -39,6 +39,9 @@ transformed parameters {
 
   {
     real log_jac[ndays-1];
+    real exp_cts[ndays];
+
+    exp_cts[1] = k[1];
     for (i in 2:ndays) {
       real Rt_counts_raw;
       real Rt_counts;
@@ -64,8 +67,8 @@ transformed parameters {
       }
       wt_prior = 1.0/(sd_prior*sd_prior);
 
-      Rt_counts_raw = tau*(log(k[i]) - log(k[i-1])) + 1.0;
-      Rt_counts = log_sum_exp(10.0*Rt_counts_raw, 0.0)/10.0; /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.1 or so */
+      Rt_counts_raw = tau*(log(k[i]) - log(exp_cts[i-1])) + 1.0;
+      Rt_counts = log_sum_exp(Rt_counts_raw, 0.0); /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.1 or so */
       sd_counts = tau / sqrt(k[i]+1);
       wt_counts = 1.0/(sd_counts*sd_counts);
 
@@ -75,6 +78,7 @@ transformed parameters {
 
       Rt[i-1] = Rt_total*exp(sd_total/Rt_total*Rt_raw[i-1]);
       log_jac[i-1] = log(Rt[i-1]) + log(sd_total) - log(Rt_total);
+      exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
     }
 
     log_jacobian = sum(log_jac);
