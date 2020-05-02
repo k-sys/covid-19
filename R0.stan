@@ -20,6 +20,17 @@ transformed data {
 }
 
 parameters {
+  /* Overdispersion factor for negative binomial likelihood; the likelihood gives
+
+  mean = mu
+
+  variance = mu + mu^2/phi
+
+  So once mu > phi, the fractional uncertainty, sqrt(variance)/mu -->
+  1/sqrt(phi).  In other words, 1/sqrt(phi) is the limiting uncertainty of the
+  measurement, no matter how many observations we have */
+  real<lower=0> phi;
+
   /* Serial time (days) */
   real<lower=0> tau;
 
@@ -69,7 +80,7 @@ transformed parameters {
 
       Rt_counts_raw = tau*(log(k[i]) - log(exp_cts[i-1])) + 1.0;
       Rt_counts = log_sum_exp(Rt_counts_raw, 0.0); /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.1 or so */
-      sd_counts = tau / sqrt(k[i]+1);
+      sd_counts = tau*sqrt(k[i] + k[i]*k[i]/phi + 1)/(k[i] + 1);
       wt_counts = 1.0/(sd_counts*sd_counts);
 
       wt_total = wt_counts + wt_prior;
@@ -87,6 +98,12 @@ transformed parameters {
 
 model {
   real exp_cts[ndays];
+
+  /* The mean here would imply that up to 100 observations, we have normal
+     Poisson counting; for greater than 100 observations, we asymptote to a 10%
+     uncertainty in the measurement.  But we are quite uncertain about phi, so
+     give it a broad prior. */
+  phi ~ lognormal(log(100), 1);
 
   /* Prior on serial time is log-normal with mean and s.d. matching input */
   tau ~ lognormal(tau_mu, tau_sigma);
@@ -109,5 +126,5 @@ model {
     exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
   }
   /* Poisson likelihood for the counts on each day. */
-  k ~ poisson(exp_cts);
+  k ~ neg_binomial_2(exp_cts, phi);
 }
