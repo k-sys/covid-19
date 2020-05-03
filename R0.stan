@@ -40,7 +40,7 @@ transformed parameters {
     real log_jac[ndays-1];
     real exp_cts[ndays];
 
-    exp_cts[1] = k[1];
+    exp_cts[1] = L0;
     for (i in 2:ndays) {
       real Rt_counts_raw;
       real Rt_counts;
