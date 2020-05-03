@@ -1,0 +1,23 @@
+name: covid
+channels:
+  - anaconda
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.6  # latest version supported by Theano
+  - jupyter
+  - notebook
+  - mkl
+  - mkl-service
+  - pymc3
+  - pandas
+  - theano
+  - numpy
+  - scipy
+  - graphviz
+  - seaborn
+  - pydot
+  - matplotlib
+  - arviz
+  - watermark
+  - requests
