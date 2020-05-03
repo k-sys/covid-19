@@ -67,12 +67,8 @@ transformed parameters {
       wt_prior = 1.0/(sd_prior*sd_prior);
 
       Rt_counts_raw = tau*(log(k[i]) - log(exp_cts[i-1])) + 1.0;
-      Rt_counts = log_sum_exp(Rt_counts_raw, 0.0); /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.1 or so */
-      if (Rt_counts_raw > 0) {
-        sd_counts = tau/sqrt(k[i]+1)/(1.0 + exp(-Rt_counts_raw));
-      } else {
-        sd_counts = tau/sqrt(k[i]+1)*exp(Rt_counts_raw)/(1.0 + exp(Rt_counts_raw));
-      }
+      Rt_counts = log_sum_exp(3.0*Rt_counts_raw, 0.0)/3.0; /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.3 or so */
+      sd_counts = tau/sqrt(k[i]+1)*exp(3.0*(Rt_counts_raw - Rt_counts));
       wt_counts = 1.0/(sd_counts*sd_counts);
 
       wt_total = wt_counts + wt_prior;
