@@ -1,7 +1,7 @@
 data {
-  /* new infection counts over days */
   int ndays;
-  int k[ndays];
+  int k[ndays]; /* Positive tests */
+  int n[ndays]; /* Number of tests */
 
   /* Parameters for the marginalization over serial time */
   real tau_mean;
@@ -25,22 +25,25 @@ parameters {
   /* stepsize of the random walk in log(Rt) */
   real<lower=0> sigma;
 
-  /* First day's number of cases */
-  real<lower=0> L0;
+  /* First day's log-odds of positive test */
+  real log_odds0_raw;
 
   /* Will be transformed into Rt. */
   real Rt_raw[ndays-1];
 }
 
 transformed parameters {
+  real log_odds0;
   real Rt[ndays-1];
   real log_jacobian;
 
+  log_odds0 = log(1+k[1]) - log(n[1]-k[1]) + sqrt((n[1]+1.0)/((1.0+k[1])*(n[1]-k[1]-1.0)))*log_odds0_raw;
+
   {
     real log_jac[ndays-1];
-    real exp_cts[ndays];
+    real log_odds[ndays];
 
-    exp_cts[1] = L0;
+    log_odds[1] = log_odds0;
     for (i in 2:ndays) {
       real Rt_counts_raw;
       real Rt_counts;
@@ -66,9 +69,23 @@ transformed parameters {
       }
       wt_prior = 1.0/(sd_prior*sd_prior);
 
-      Rt_counts_raw = tau*(log(k[i]) - log(exp_cts[i-1])) + 1.0;
+      Rt_counts_raw = tau*(log(k[i]+1.0) - log(n[i]-k[i]) - log_odds[i-1]) + 1.0;
       Rt_counts = log_sum_exp(3.0*Rt_counts_raw, 0.0)/3.0; /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.3 or so */
-      sd_counts = tau/sqrt(k[i]+1)*exp(3.0*(Rt_counts_raw - Rt_counts));
+      /* This formula deserves some explanation: for a binomial distribution
+      /* with k successes out of N trials, the variance of the odds (p/(1-p)) is
+
+         (1+k)*(1+N)/((N-k)^2 (N-k-1))
+
+         While the expected value of the odds is
+
+         (1+k)/(N-k)
+
+         The ratio of the s.d. to the mean (i.e. the s.d. of the log-odds is)
+
+         sqrt((1+N)/((1+k)*(N-k-1)))
+
+         */
+      sd_counts = tau*sqrt((n[i]+1.0)/((1.0+k[i])*(n[i]-k[i]-1.0)))*exp(3.0*(Rt_counts_raw - Rt_counts));
       wt_counts = 1.0/(sd_counts*sd_counts);
 
       wt_total = wt_counts + wt_prior;
@@ -77,7 +94,7 @@ transformed parameters {
 
       Rt[i-1] = Rt_total*exp(sd_total/Rt_total*Rt_raw[i-1]);
       log_jac[i-1] = log(Rt[i-1]) + log(sd_total) - log(Rt_total);
-      exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
+      log_odds[i] = log_odds[i-1] + (Rt[i-1]-1)/tau;
     }
 
     log_jacobian = sum(log_jac);
@@ -85,13 +102,16 @@ transformed parameters {
 }
 
 model {
-  real exp_cts[ndays];
+  real log_odds[ndays];
 
   /* Prior on serial time is log-normal with mean and s.d. matching input */
   tau ~ lognormal(tau_mu, tau_sigma);
 
   /* Prior on sigma, supplied by the user. */
   sigma ~ normal(0, sigma_scale);
+
+  /* Initial log-odds given wide prior */
+  log_odds0 ~ normal(0, 2);
 
   /* The AR(1) process prior; we begin with an N(3,2) prior on Rt based on
      Chinese studies at the first sample, and then increment according to the
@@ -103,10 +123,10 @@ model {
   }
   target += log_jacobian;
 
-  exp_cts[1] = L0;
+  log_odds[1] = log_odds0;
   for (i in 2:ndays) {
-    exp_cts[i] = exp_cts[i-1]*exp((Rt[i-1]-1)/tau);
+    log_odds[i] = log_odds[i-1] + (Rt[i-1]-1)/tau;
   }
   /* Poisson likelihood for the counts on each day. */
-  k ~ poisson(exp_cts);
+  k ~ binomial_logit(n, log_odds);
 }
