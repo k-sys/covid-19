@@ -1,7 +1,6 @@
 data {
   int ndays;
   int k[ndays]; /* Positive tests */
-  int n[ndays]; /* Number of tests */
 
   /* Parameters for the marginalization over serial time */
   real tau_mean;
