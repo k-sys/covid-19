@@ -1,0 +1,13 @@
+name: covid-19
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - pystan
+  - jupyterlab
+  - seaborn
+  - arviz
+  - scipy
+  - pandas
+  - python=3.7
+  - tqdm
