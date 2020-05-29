@@ -16,6 +16,27 @@ transformed data {
   /* given mean and s.d. */
   real tau_mu = log(tau_mean / sqrt(1.0 + tau_std^2/tau_mean^2));
   real tau_sigma = sqrt(log1p(tau_std^2/tau_mean^2));
+
+  /* The parameter phi controls the "excess variance" of the negative binomial
+  /* over Poisson.  For the negative binomial distribution, we have
+
+  <X> = mu
+
+  Var(x) = mu + mu^2/phi = mu*(1 + mu/phi)
+
+  So that for mu << phi the distribution behaves "like Poisson;" but for mu >>
+  phi we have
+
+  sqrt(Var(x))/<X> = 1/sqrt(phi)
+
+  that is: the *fractional* uncertainty asymptotes to the same fractional
+  uncertainty as Possion with phi counts, no matter how large mu grows.
+
+  Here we choose phi = 1000, semi-arbitrarily.  This limits the relative
+  uncertainty in the positive rate to ~few percent on any given day.
+
+  */
+  real phi = 100.0;
 }
 
 parameters {
@@ -25,76 +46,38 @@ parameters {
   /* stepsize of the random walk in log(Rt) */
   real<lower=0> sigma;
 
-  /* First day's log-odds of positive test */
-  real log_odds0_raw;
+  /* First day's expected number of infections. */
+  real L0_raw;
 
   /* Will be transformed into Rt. */
   real Rt_raw[ndays-1];
 }
 
 transformed parameters {
-  real log_odds0;
+  real L0;
+  real log_jac_L0;
   real Rt[ndays-1];
   real log_jacobian;
 
-  log_odds0 = log(1+k[1]) - log(n[1]-k[1]) + sqrt((n[1]+1.0)/((1.0+k[1])*(n[1]-k[1]-1.0)))*log_odds0_raw;
+  L0 = (k[1]+1)*exp(L0_raw/sqrt(k[1]+1));
+  log_jac_L0 = log(L0) - 0.5*log(k[1]+1);
 
+  /* Here we transform the raw variables into Rt following the AR(1) prior;
+     because we are using a negative binomial observational model, as long as
+     the value of sigma is comparable to 1/sqrt(phi) ~ 0.03 (i.e. as long as the
+     user puts in a small sigma_scale), then the prior is comparable to the
+     likelihood for each observation, and we will be approximately uncorrelated. */
   {
     real log_jac[ndays-1];
-    real log_odds[ndays];
 
-    log_odds[1] = log_odds0;
     for (i in 2:ndays) {
-      real Rt_counts_raw;
-      real Rt_counts;
-      real sd_counts;
-      real wt_counts;
-
-      real Rt_prior;
-      real sd_prior;
-      real wt_prior;
-
-      real Rt_total;
-      real sd_total;
-      real wt_total;
-
-      real Rt_est;
-
       if (i == 2) {
-        Rt_prior = 3.0;
-        sd_prior = 2.0;
+        Rt[i-1] = 3*exp(2.0/3.0*Rt_raw[i-1]);
+        log_jac[i-1] = log(Rt[i-1]) + log(2.0/3.0);
       } else {
-        Rt_prior = Rt[i-2];
-        sd_prior = sigma*Rt[i-2];
+        Rt[i-1] = Rt[i-2]*exp(sigma*Rt_raw[i-1]);
+        log_jac[i-1] = log(Rt[i-1]) + log(sigma);
       }
-      wt_prior = 1.0/(sd_prior*sd_prior);
-
-      Rt_counts_raw = tau*(log(k[i]+1.0) - log(n[i]-k[i]) - log_odds[i-1]) + 1.0;
-      Rt_counts = log_sum_exp(3.0*Rt_counts_raw, 0.0)/3.0; /* Ensure Rt_counts > 0, and make it linear for Rt_counts_raw > 0.3 or so */
-      /* This formula deserves some explanation: for a binomial distribution
-      /* with k successes out of N trials, the variance of the odds (p/(1-p)) is
-
-         (1+k)*(1+N)/((N-k)^2 (N-k-1))
-
-         While the expected value of the odds is
-
-         (1+k)/(N-k)
-
-         The ratio of the s.d. to the mean (i.e. the s.d. of the log-odds is)
-
-         sqrt((1+N)/((1+k)*(N-k-1)))
-
-         */
-      sd_counts = tau*sqrt((n[i]+1.0)/((1.0+k[i])*(n[i]-k[i]-1.0)))*exp(3.0*(Rt_counts_raw - Rt_counts));
-      wt_counts = 1.0/(sd_counts*sd_counts);
-
-      wt_total = wt_counts + wt_prior;
-      Rt_total = (wt_counts*Rt_counts + wt_prior*Rt_prior)/wt_total;
-      sd_total = sd_counts*sd_prior/sqrt(sd_counts*sd_counts + sd_prior*sd_prior);
-
-      Rt[i-1] = Rt_total*exp(sd_total/Rt_total*Rt_raw[i-1]);
-      log_jac[i-1] = log(Rt[i-1]) + log(sd_total) - log(Rt_total);
-      log_odds[i] = log_odds[i-1] + (Rt[i-1]-1)/tau;
     }
 
     log_jacobian = sum(log_jac);
@@ -102,7 +85,7 @@ transformed parameters {
 }
 
 model {
-  real log_odds[ndays];
+  real ex_cts[ndays];
 
   /* Prior on serial time is log-normal with mean and s.d. matching input */
   tau ~ lognormal(tau_mu, tau_sigma);
@@ -111,7 +94,8 @@ model {
   sigma ~ normal(0, sigma_scale);
 
   /* Initial log-odds given wide prior */
-  log_odds0 ~ normal(0, 2);
+  L0 ~ lognormal(log(10), 1);
+  target += log_jac_L0;
 
   /* The AR(1) process prior; we begin with an N(3,2) prior on Rt based on
      Chinese studies at the first sample, and then increment according to the
@@ -123,10 +107,11 @@ model {
   }
   target += log_jacobian;
 
-  log_odds[1] = log_odds0;
+  ex_cts[1] = L0;
   for (i in 2:ndays) {
-    log_odds[i] = log_odds[i-1] + (Rt[i-1]-1)/tau;
+    ex_cts[i] = ex_cts[i-1]*exp((Rt[i-1]-1.0)/tau);
   }
-  /* Poisson likelihood for the counts on each day. */
-  k ~ binomial_logit(n, log_odds);
+
+  /* Negative binomial likelihood for the counts on each day. */
+  k ~ neg_binomial_2(ex_cts, phi);
 }
